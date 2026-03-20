@@ -3,12 +3,20 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 const BACKEND = 'https://ibexradar-backend.onrender.com'
 
 const SYMBOLS = [
-  { id: 'IBEX', label: 'IBEX 35', flag: '🇪🇸', ticker: '^IBEX' },
-  { id: 'NDX', label: 'NASDAQ', flag: '🇺🇸', ticker: '^NDX' },
-  { id: 'SPX', label: 'S&P 500', flag: '🇺🇸', ticker: '^GSPC' },
-  { id: 'DAX', label: 'DAX', flag: '🇩🇪', ticker: '^GDAXI' },
-  { id: 'BTC', label: 'Bitcoin', flag: '₿', ticker: 'BTC-USD' },
+  { id: 'IBEX',   label: 'IBEX 35',  flag: '🇪🇸', ticker: '^IBEX',     group: 'Índices' },
+  { id: 'NDX',    label: 'NASDAQ',   flag: '🇺🇸', ticker: '^NDX',      group: 'Índices' },
+  { id: 'SPX',    label: 'S&P 500',  flag: '🇺🇸', ticker: '^GSPC',     group: 'Índices' },
+  { id: 'DAX',    label: 'DAX',      flag: '🇩🇪', ticker: '^GDAXI',    group: 'Índices' },
+  { id: 'EURUSD', label: 'EUR/USD',  flag: '💶',  ticker: 'EURUSD=X',  group: 'Forex'   },
+  { id: 'USDCHF', label: 'USD/CHF',  flag: '🇨🇭', ticker: 'USDCHF=X',  group: 'Forex'   },
+  { id: 'BTC',    label: 'Bitcoin',  flag: '₿',   ticker: 'BTC-USD',   group: 'Cripto'  },
+  { id: 'ETH',    label: 'Ethereum', flag: '🔷',  ticker: 'ETH-USD',   group: 'Cripto'  },
+  { id: 'BNB',    label: 'BNB',      flag: '🟡',  ticker: 'BNB-USD',   group: 'Cripto'  },
+  { id: 'SOL',    label: 'Solana',   flag: '🟣',  ticker: 'SOL-USD',   group: 'Cripto'  },
+  { id: 'XRP',    label: 'XRP',      flag: '🔵',  ticker: 'XRP-USD',   group: 'Cripto'  },
 ]
+
+const GROUPS = ['Índices', 'Forex', 'Cripto']
 
 const TIMEFRAMES = ['4H', 'Daily', 'Weekly', 'Monthly']
 const TF_PARAMS = {
@@ -274,9 +282,16 @@ export default function App() {
           </div>
           <button onClick={() => fetchData(sym, tf)} disabled={loading} style={{ background: loading ? '#334155' : '#1e3a5f', border: '1px solid #3b82f6', color: '#3b82f6', borderRadius: '8px', padding: '7px 14px', fontSize: '16px', fontWeight: 700 }}>↻</button>
         </div>
-        <div style={{ display: 'flex', gap: '6px', marginTop: '10px', overflowX: 'auto', paddingBottom: '2px' }}>
-          {SYMBOLS.map(s => <button key={s.id} onClick={() => setSym(s.id)} style={{ padding: '5px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 700, whiteSpace: 'nowrap', border: 'none', background: sym === s.id ? '#3b82f6' : '#1e293b', color: sym === s.id ? '#fff' : '#94a3b8', boxShadow: sym === s.id ? '0 0 8px #3b82f666' : 'none' }}>{s.flag} {s.label}</button>)}
-        </div>
+        {['Índices', 'Forex', 'Cripto'].map(group => (
+          <div key={group} style={{ marginTop: '8px' }}>
+            <div style={{ fontSize: '9px', color: '#475569', fontWeight: 700, letterSpacing: '1px', marginBottom: '3px' }}>{group.toUpperCase()}</div>
+            <div style={{ display: 'flex', gap: '5px', overflowX: 'auto', paddingBottom: '2px' }}>
+              {SYMBOLS.filter(s => s.group === group).map(s => (
+                <button key={s.id} onClick={() => setSym(s.id)} style={{ padding: '4px 9px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', border: 'none', background: sym === s.id ? '#3b82f6' : '#0f172a', color: sym === s.id ? '#fff' : '#94a3b8', boxShadow: sym === s.id ? '0 0 8px #3b82f666' : 'none' }}>{s.flag} {s.label}</button>
+              ))}
+            </div>
+          </div>
+        ))}
         <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
           {TIMEFRAMES.map(t => <button key={t} onClick={() => setTf(t)} style={{ flex: 1, padding: '6px 0', borderRadius: '6px', fontSize: '12px', fontWeight: 700, border: tf === t ? '1px solid #3b82f6' : '1px solid #334155', background: tf === t ? '#1e3a5f' : 'transparent', color: tf === t ? '#3b82f6' : '#64748b' }}>{t}</button>)}
         </div>
