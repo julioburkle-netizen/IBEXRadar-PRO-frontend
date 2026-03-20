@@ -3,21 +3,20 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 const BACKEND = 'https://ibexradar-backend.onrender.com'
 
 const SYMBOLS = [
-  { id: 'IBEX',   label: 'IBEX 35',  flag: '🇪🇸', ticker: '^IBEX',     group: 'Índices' },
-  { id: 'NDX',    label: 'NASDAQ',   flag: '🇺🇸', ticker: '^NDX',      group: 'Índices' },
-  { id: 'SPX',    label: 'S&P 500',  flag: '🇺🇸', ticker: '^GSPC',     group: 'Índices' },
-  { id: 'DAX',    label: 'DAX',      flag: '🇩🇪', ticker: '^GDAXI',    group: 'Índices' },
-  { id: 'EURUSD', label: 'EUR/USD',  flag: '💶',  ticker: 'EURUSD=X',  group: 'Forex'   },
-  { id: 'USDCHF', label: 'USD/CHF',  flag: '🇨🇭', ticker: 'USDCHF=X',  group: 'Forex'   },
-  { id: 'BTC',    label: 'Bitcoin',  flag: '₿',   ticker: 'BTC-USD',   group: 'Cripto'  },
-  { id: 'ETH',    label: 'Ethereum', flag: '🔷',  ticker: 'ETH-USD',   group: 'Cripto'  },
-  { id: 'BNB',    label: 'BNB',      flag: '🟡',  ticker: 'BNB-USD',   group: 'Cripto'  },
-  { id: 'SOL',    label: 'Solana',   flag: '🟣',  ticker: 'SOL-USD',   group: 'Cripto'  },
-  { id: 'XRP',    label: 'XRP',      flag: '🔵',  ticker: 'XRP-USD',   group: 'Cripto'  },
+  { id: 'IBEX',   label: 'IBEX 35',  flag: '🇪🇸', ticker: '^IBEX',    group: 'Índices' },
+  { id: 'NDX',    label: 'NASDAQ',   flag: '🇺🇸', ticker: '^NDX',     group: 'Índices' },
+  { id: 'SPX',    label: 'S&P 500',  flag: '🇺🇸', ticker: '^GSPC',    group: 'Índices' },
+  { id: 'DAX',    label: 'DAX',      flag: '🇩🇪', ticker: '^GDAXI',   group: 'Índices' },
+  { id: 'EURUSD', label: 'EUR/USD',  flag: '💶',  ticker: 'EURUSD=X', group: 'Forex'   },
+  { id: 'USDCHF', label: 'USD/CHF',  flag: '🇨🇭', ticker: 'USDCHF=X', group: 'Forex'   },
+  { id: 'BTC',    label: 'Bitcoin',  flag: '₿',   ticker: 'BTC-USD',  group: 'Cripto'  },
+  { id: 'ETH',    label: 'Ethereum', flag: '🔷',  ticker: 'ETH-USD',  group: 'Cripto'  },
+  { id: 'BNB',    label: 'BNB',      flag: '🟡',  ticker: 'BNB-USD',  group: 'Cripto'  },
+  { id: 'SOL',    label: 'Solana',   flag: '🟣',  ticker: 'SOL-USD',  group: 'Cripto'  },
+  { id: 'XRP',    label: 'XRP',      flag: '🔵',  ticker: 'XRP-USD',  group: 'Cripto'  },
 ]
 
 const GROUPS = ['Índices', 'Forex', 'Cripto']
-
 const TIMEFRAMES = ['4H', 'Daily', 'Weekly', 'Monthly']
 const TF_PARAMS = {
   '4H':     { interval: '1h',  range: '60d' },
@@ -25,6 +24,8 @@ const TF_PARAMS = {
   'Weekly': { interval: '1wk', range: '5y'  },
   'Monthly':{ interval: '1mo', range: '10y' },
 }
+
+// ── Indicators ───────────────────────────────────────────────────────────────
 
 function calcEMA(arr, period) {
   const k = 2 / (period + 1)
@@ -36,9 +37,7 @@ function calcEMA(arr, period) {
     if (!started) {
       sum += v; cnt++
       if (cnt === period) { prev = sum / period; out[i] = prev; started = true }
-    } else {
-      prev = v * k + prev * (1 - k); out[i] = prev
-    }
+    } else { prev = v * k + prev * (1 - k); out[i] = prev }
   }
   return out
 }
@@ -76,10 +75,9 @@ function stochastic(arr, period) {
 
 function calcSTC(closes, fast = 26, slow = 50, cycle = 12, smooth = 0.5) {
   if (closes.length < slow + cycle * 2) return null
-  const macd = calcEMA(closes, fast).map((v, i) => {
-    const s = calcEMA(closes, slow)[i]
-    return v !== null && s !== null ? v - s : null
-  })
+  const emaF = calcEMA(closes, fast)
+  const emaS = calcEMA(closes, slow)
+  const macd = emaF.map((v, i) => v !== null && emaS[i] !== null ? v - emaS[i] : null)
   const st1 = stochastic(macd, cycle)
   const sm1 = new Array(st1.length).fill(null)
   for (let i = 1; i < st1.length; i++) {
@@ -149,41 +147,119 @@ function parseYahoo(json) {
   } catch { return null }
 }
 
+// ── Signal helpers ───────────────────────────────────────────────────────────
+
+function getSignal(value, ind) {
+  if (value == null) return 'neutral'
+  if (ind === 'STC') return value >= 75 ? 'bull' : value <= 25 ? 'bear' : 'neutral'
+  if (ind === 'SMI') return value >= 40 ? 'bull' : value <= -40 ? 'bear' : 'neutral'
+  if (ind === 'HARSi') return value >= 60 ? 'bull' : value <= 40 ? 'bear' : 'neutral'
+  return 'neutral'
+}
+
 function getColor(value, ind) {
-  if (value == null) return '#64748b'
-  if (ind === 'STC') return value >= 75 ? '#22c55e' : value <= 25 ? '#ef4444' : '#f59e0b'
-  if (ind === 'SMI') return value >= 40 ? '#22c55e' : value <= -40 ? '#ef4444' : '#f59e0b'
-  if (ind === 'HARSi') return value >= 60 ? '#22c55e' : value <= 40 ? '#ef4444' : '#f59e0b'
-  return '#94a3b8'
+  const sig = getSignal(value, ind)
+  return sig === 'bull' ? '#22c55e' : sig === 'bear' ? '#ef4444' : '#f59e0b'
 }
 
 function getLabel(value, ind) {
   if (value == null) return '—'
-  if (ind === 'STC') return value >= 75 ? '▲ ALCISTA' : value <= 25 ? '▼ BAJISTA' : '◆ NEUTRAL'
-  if (ind === 'SMI') return value >= 40 ? '▲ SOBRECOMPRA' : value <= -40 ? '▼ SOBREVENTA' : '◆ NEUTRAL'
-  if (ind === 'HARSi') return value >= 60 ? '▲ FUERTE' : value <= 40 ? '▼ DÉBIL' : '◆ MODERADO'
+  const sig = getSignal(value, ind)
+  if (ind === 'STC') return sig === 'bull' ? '▲ ALCISTA' : sig === 'bear' ? '▼ BAJISTA' : '◆ NEUTRAL'
+  if (ind === 'SMI') return sig === 'bull' ? '▲ SOBRECOMPRA' : sig === 'bear' ? '▼ SOBREVENTA' : '◆ NEUTRAL'
+  if (ind === 'HARSi') return sig === 'bull' ? '▲ FUERTE' : sig === 'bear' ? '▼ DÉBIL' : '◆ MODERADO'
   return '—'
 }
 
+// ── Notifications ────────────────────────────────────────────────────────────
+
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) return false
+  if (Notification.permission === 'granted') return true
+  const perm = await Notification.requestPermission()
+  return perm === 'granted'
+}
+
+function sendNotification(title, body, icon = '/icon-192.png') {
+  if (Notification.permission === 'granted') {
+    new Notification(title, { body, icon, badge: '/icon-192.png', vibrate: [200, 100, 200] })
+  }
+}
+
+function checkAlerts(newData, prevData, sym, tf, alertConfig) {
+  if (!alertConfig?.enabled) return
+  const symLabel = SYMBOLS.find(s => s.id === sym)?.label || sym
+  const indicators = ['STC', 'SMI', 'HARSi']
+  for (const ind of indicators) {
+    if (!alertConfig[ind]) continue
+    const newVal = newData[ind]
+    const prevVal = prevData?.[ind]
+    if (newVal == null) continue
+    const newSig = getSignal(newVal, ind)
+    const prevSig = prevVal != null ? getSignal(prevVal, ind) : null
+
+    // Signal change alert
+    if (prevSig && prevSig !== newSig) {
+      const emoji = newSig === 'bull' ? '🟢' : newSig === 'bear' ? '🔴' : '🟡'
+      sendNotification(
+        `${emoji} ${ind} — ${symLabel} ${tf}`,
+        `Señal cambió a ${getLabel(newVal, ind)} (${newVal.toFixed(1)})`
+      )
+    }
+
+    // Level cross alerts
+    if (prevVal != null) {
+      if (ind === 'STC') {
+        if (prevVal < 75 && newVal >= 75) sendNotification(`🟢 STC ALCISTA — ${symLabel} ${tf}`, `STC cruzó 75 → ${newVal.toFixed(1)}`)
+        if (prevVal > 25 && newVal <= 25) sendNotification(`🔴 STC BAJISTA — ${symLabel} ${tf}`, `STC cruzó 25 → ${newVal.toFixed(1)}`)
+      }
+      if (ind === 'SMI') {
+        if (prevVal < 40 && newVal >= 40) sendNotification(`🟢 SMI SOBRECOMPRA — ${symLabel} ${tf}`, `SMI cruzó 40 → ${newVal.toFixed(1)}`)
+        if (prevVal > -40 && newVal <= -40) sendNotification(`🔴 SMI SOBREVENTA — ${symLabel} ${tf}`, `SMI cruzó -40 → ${newVal.toFixed(1)}`)
+      }
+      if (ind === 'HARSi') {
+        if (prevVal < 60 && newVal >= 60) sendNotification(`🟢 HARSi FUERTE — ${symLabel} ${tf}`, `HARSi cruzó 60 → ${newVal.toFixed(1)}`)
+        if (prevVal > 40 && newVal <= 40) sendNotification(`🔴 HARSi DÉBIL — ${symLabel} ${tf}`, `HARSi cruzó 40 → ${newVal.toFixed(1)}`)
+      }
+    }
+  }
+}
+
+// ── UI Components ─────────────────────────────────────────────────────────────
+
 function Badge({ value, indicator }) {
   const color = getColor(value, indicator)
-  return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, color, background: color + '22', border: `1px solid ${color}44` }}>{getLabel(value, indicator)}</span>
+  return (
+    <span style={{
+      display: 'inline-block', padding: '4px 10px', borderRadius: '6px',
+      fontSize: '12px', fontWeight: 800, color,
+      background: color + '22', border: `1px solid ${color}44`
+    }}>
+      {getLabel(value, indicator)}
+    </span>
+  )
 }
 
 function GaugeBar({ value, min, max, color }) {
   const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100))
-  return <div style={{ width: '100%', height: '6px', background: '#334155', borderRadius: '3px', overflow: 'hidden' }}><div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg,${color}88,${color})`, borderRadius: '3px', transition: 'width .5s' }} /></div>
+  return (
+    <div style={{ width: '100%', height: '8px', background: '#334155', borderRadius: '4px', overflow: 'hidden' }}>
+      <div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg,${color}88,${color})`, borderRadius: '4px', transition: 'width .5s' }} />
+    </div>
+  )
 }
 
 function IndicatorCard({ name, value, min, max }) {
   const color = getColor(value, name)
   return (
-    <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', padding: '10px 12px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-        <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{name}</span>
+    <div style={{ background: '#0f172a', border: `1px solid ${value != null ? color + '44' : '#334155'}`, borderRadius: '10px', padding: '14px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+        <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}>{name}</span>
         <Badge value={value} indicator={name} />
       </div>
-      <div style={{ fontSize: '22px', fontWeight: 700, color, marginBottom: '6px', fontVariantNumeric: 'tabular-nums' }}>{value != null ? value.toFixed(1) : '—'}</div>
+      <div style={{ fontSize: '32px', fontWeight: 800, color, marginBottom: '8px', fontVariantNumeric: 'tabular-nums' }}>
+        {value != null ? value.toFixed(1) : '—'}
+      </div>
       {value != null && <GaugeBar value={value} min={min} max={max} color={color} />}
     </div>
   )
@@ -192,14 +268,95 @@ function IndicatorCard({ name, value, min, max }) {
 function Section({ title, icon, children, open: initOpen = true }) {
   const [open, setOpen] = useState(initOpen)
   return (
-    <div style={{ marginBottom: '12px' }}>
-      <button onClick={() => setOpen(!open)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#1e293b', border: '1px solid #334155', borderRadius: open ? '8px 8px 0 0' : '8px', padding: '10px 14px', color: '#f1f5f9', fontSize: '13px', fontWeight: 700 }}>
-        <span>{icon} {title}</span><span style={{ color: '#64748b' }}>{open ? '▲' : '▼'}</span>
+    <div style={{ marginBottom: '14px' }}>
+      <button onClick={() => setOpen(!open)} style={{
+        width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        background: '#1e293b', border: '1px solid #334155',
+        borderRadius: open ? '10px 10px 0 0' : '10px',
+        padding: '12px 16px', color: '#f1f5f9', fontSize: '15px', fontWeight: 700,
+      }}>
+        <span>{icon} {title}</span>
+        <span style={{ color: '#64748b', fontSize: '14px' }}>{open ? '▲' : '▼'}</span>
       </button>
-      {open && <div style={{ background: '#1e293b', border: '1px solid #334155', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '12px' }}>{children}</div>}
+      {open && (
+        <div style={{ background: '#1e293b', border: '1px solid #334155', borderTop: 'none', borderRadius: '0 0 10px 10px', padding: '14px' }}>
+          {children}
+        </div>
+      )}
     </div>
   )
 }
+
+// ── Alert Config Panel ────────────────────────────────────────────────────────
+
+function AlertPanel({ alertConfig, setAlertConfig, notifPermission, onRequestPermission }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+        <div>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: '#f1f5f9' }}>Alarmas Android</div>
+          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Notificaciones nativas en tu móvil</div>
+        </div>
+        <button
+          onClick={() => setAlertConfig(p => ({ ...p, enabled: !p.enabled }))}
+          style={{
+            padding: '8px 16px', borderRadius: '20px', fontSize: '13px', fontWeight: 700, border: 'none',
+            background: alertConfig.enabled ? '#22c55e' : '#334155',
+            color: alertConfig.enabled ? '#fff' : '#64748b',
+          }}
+        >
+          {alertConfig.enabled ? '✅ ON' : 'OFF'}
+        </button>
+      </div>
+
+      {notifPermission !== 'granted' && (
+        <button onClick={onRequestPermission} style={{
+          width: '100%', marginBottom: '14px', padding: '12px', borderRadius: '8px',
+          background: '#1e3a5f', border: '1px solid #3b82f6', color: '#3b82f6',
+          fontSize: '14px', fontWeight: 700
+        }}>
+          🔔 Activar notificaciones del sistema
+        </button>
+      )}
+
+      {notifPermission === 'granted' && (
+        <div style={{ background: '#14532d', border: '1px solid #22c55e', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', fontSize: '13px', color: '#86efac' }}>
+          ✅ Notificaciones activadas en este dispositivo
+        </div>
+      )}
+
+      <div style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 700, marginBottom: '8px' }}>AVISAR CUANDO:</div>
+      {['STC', 'SMI', 'HARSi'].map(ind => (
+        <div key={ind} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #0f172a' }}>
+          <div>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#f1f5f9' }}>{ind}</div>
+            <div style={{ fontSize: '12px', color: '#64748b' }}>
+              {ind === 'STC' && 'Cruza 25 o 75 · Cambia señal'}
+              {ind === 'SMI' && 'Cruza -40 o 40 · Cambia señal'}
+              {ind === 'HARSi' && 'Cruza 40 o 60 · Cambia señal'}
+            </div>
+          </div>
+          <button
+            onClick={() => setAlertConfig(p => ({ ...p, [ind]: !p[ind] }))}
+            style={{
+              padding: '6px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: 700, border: 'none',
+              background: alertConfig[ind] ? '#3b82f6' : '#334155',
+              color: alertConfig[ind] ? '#fff' : '#64748b'
+            }}
+          >
+            {alertConfig[ind] ? '✅' : '○'}
+          </button>
+        </div>
+      ))}
+
+      <div style={{ marginTop: '14px', padding: '10px 14px', background: '#0f172a', borderRadius: '8px', fontSize: '12px', color: '#64748b' }}>
+        ℹ️ La app revisa señales automáticamente cada 5 minutos cuando está abierta.
+      </div>
+    </div>
+  )
+}
+
+// ── Main App ──────────────────────────────────────────────────────────────────
 
 export default function App() {
   const [sym, setSym] = useState('IBEX')
@@ -208,54 +365,68 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [lastUpdate, setLastUpdate] = useState(null)
   const [error, setError] = useState(null)
+  const [notifPermission, setNotifPermission] = useState(Notification?.permission || 'default')
+  const [alertConfig, setAlertConfig] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('alert_config') || '{"enabled":true,"STC":true,"SMI":true,"HARSi":true}') }
+    catch { return { enabled: true, STC: true, SMI: true, HARSi: true } }
+  })
   const [tgToken, setTgToken] = useState(() => localStorage.getItem('tg_token') || '')
   const [tgChat, setTgChat] = useState(() => localStorage.getItem('tg_chatid') || '')
-  const [alertCfg, setAlertCfg] = useState(() => { try { return JSON.parse(localStorage.getItem('alert_config') || '{}') } catch { return {} } })
   const [testStatus, setTestStatus] = useState(null)
   const timer = useRef(null)
+  const prevCache = useRef({})
 
+  useEffect(() => { localStorage.setItem('alert_config', JSON.stringify(alertConfig)) }, [alertConfig])
   useEffect(() => { localStorage.setItem('tg_token', tgToken) }, [tgToken])
   useEffect(() => { localStorage.setItem('tg_chatid', tgChat) }, [tgChat])
-  useEffect(() => { localStorage.setItem('alert_config', JSON.stringify(alertCfg)) }, [alertCfg])
 
-  const fetchData = useCallback(async (symbolId, timeframe) => {
+  const requestPermission = async () => {
+    const granted = await requestNotificationPermission()
+    setNotifPermission(granted ? 'granted' : 'denied')
+  }
+
+  const fetchData = useCallback(async (symbolId, timeframe, silent = false) => {
     const s = SYMBOLS.find(x => x.id === symbolId)
     if (!s) return
     const { interval, range } = TF_PARAMS[timeframe]
-    setLoading(true); setError(null)
+    if (!silent) { setLoading(true); setError(null) }
     try {
       const res = await fetch(`${BACKEND}/api/yahoo?ticker=${encodeURIComponent(s.ticker)}&interval=${interval}&range=${range}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const parsed = parseYahoo(await res.json())
-      if (!parsed) throw new Error('Sin datos')
+      if (!parsed) throw new Error('Sin datos de Yahoo Finance')
       let { closes, highs, lows, volumes, price, priceChange } = parsed
       if (timeframe === '4H') {
-        closes = closes.filter((_, i) => i % 4 === 0)
-        highs = highs.filter((_, i) => i % 4 === 0)
-        lows = lows.filter((_, i) => i % 4 === 0)
+        closes  = closes.filter((_, i) => i % 4 === 0)
+        highs   = highs.filter((_, i) => i % 4 === 0)
+        lows    = lows.filter((_, i) => i % 4 === 0)
         volumes = volumes.filter((_, i) => i % 4 === 0)
       }
       const vc = closes.filter(v => v !== null)
       const vh = highs.filter(v => v !== null)
       const vl = lows.filter(v => v !== null)
       const vv = volumes.filter(v => v !== null)
-      setCache(prev => ({
-        ...prev,
-        [`${symbolId}_${timeframe}`]: {
-          STC: calcSTC(vc), SMI: calcSMI(vh, vl, vc),
-          HARSi: calcHARSi(vc), volOsc: calcVolumeOsc(vv),
-          price, priceChange
-        }
-      }))
-      setLastUpdate(new Date())
-    } catch (e) { setError(e.message) }
-    finally { setLoading(false) }
-  }, [])
+      const newData = {
+        STC: calcSTC(vc), SMI: calcSMI(vh, vl, vc),
+        HARSi: calcHARSi(vc), volOsc: calcVolumeOsc(vv),
+        price, priceChange
+      }
+      const key = `${symbolId}_${timeframe}`
+      checkAlerts(newData, prevCache.current[key], symbolId, timeframe, alertConfig)
+      prevCache.current[key] = newData
+      setCache(prev => ({ ...prev, [key]: newData }))
+      if (!silent) setLastUpdate(new Date())
+    } catch (e) {
+      if (!silent) setError(e.message)
+    } finally {
+      if (!silent) setLoading(false)
+    }
+  }, [alertConfig])
 
   useEffect(() => {
     fetchData(sym, tf)
     if (timer.current) clearInterval(timer.current)
-    timer.current = setInterval(() => fetchData(sym, tf), 60000)
+    timer.current = setInterval(() => fetchData(sym, tf, true), 5 * 60 * 1000) // every 5 min
     return () => clearInterval(timer.current)
   }, [sym, tf, fetchData])
 
@@ -266,94 +437,173 @@ export default function App() {
     if (!tgToken || !tgChat) { setTestStatus({ ok: false, msg: 'Rellena Token y Chat ID' }); return }
     setTestStatus({ ok: null, msg: 'Enviando...' })
     try {
-      const res = await fetch(`${BACKEND}/api/telegram/test`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: tgToken, chatId: tgChat }) })
+      const res = await fetch(`${BACKEND}/api/telegram/test`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: tgToken, chatId: tgChat })
+      })
       const d = await res.json()
       setTestStatus({ ok: d.ok, msg: d.ok ? '✅ Enviado' : `❌ ${d.error}` })
     } catch { setTestStatus({ ok: false, msg: '❌ Error de conexión' }) }
   }
 
   return (
-    <div style={{ maxWidth: '480px', margin: '0 auto', minHeight: '100vh', paddingBottom: '40px' }}>
-      <div style={{ background: 'linear-gradient(135deg,#1e293b,#0f172a)', borderBottom: '1px solid #334155', padding: '14px 16px 12px', position: 'sticky', top: 0, zIndex: 100 }}>
+    <div style={{ maxWidth: '480px', margin: '0 auto', minHeight: '100vh', paddingBottom: '40px', fontSize: '16px' }}>
+      {/* HEADER */}
+      <div style={{
+        background: 'linear-gradient(135deg,#1e293b,#0f172a)',
+        borderBottom: '1px solid #334155', padding: '16px 16px 12px',
+        position: 'sticky', top: 0, zIndex: 100
+      }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: '18px', fontWeight: 800, color: '#f1f5f9' }}>📡 IBEXRadar <span style={{ color: '#3b82f6' }}>PRO</span></div>
-            <div style={{ fontSize: '10px', color: '#64748b', marginTop: '1px' }}>{lastUpdate ? `Actualizado: ${lastUpdate.toLocaleTimeString('es-ES')}` : 'Cargando...'}{loading && ' ⟳'}</div>
+            <div style={{ fontSize: '22px', fontWeight: 800, color: '#f1f5f9' }}>
+              📡 IBEXRadar <span style={{ color: '#3b82f6' }}>PRO</span>
+            </div>
+            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+              {lastUpdate ? `Actualizado: ${lastUpdate.toLocaleTimeString('es-ES')}` : 'Cargando...'}{loading && ' ⟳'}
+            </div>
           </div>
-          <button onClick={() => fetchData(sym, tf)} disabled={loading} style={{ background: loading ? '#334155' : '#1e3a5f', border: '1px solid #3b82f6', color: '#3b82f6', borderRadius: '8px', padding: '7px 14px', fontSize: '16px', fontWeight: 700 }}>↻</button>
+          <button onClick={() => fetchData(sym, tf)} disabled={loading} style={{
+            background: loading ? '#334155' : '#1e3a5f', border: '1px solid #3b82f6',
+            color: '#3b82f6', borderRadius: '10px', padding: '10px 16px', fontSize: '18px', fontWeight: 700
+          }}>↻</button>
         </div>
-        {['Índices', 'Forex', 'Cripto'].map(group => (
-          <div key={group} style={{ marginTop: '8px' }}>
-            <div style={{ fontSize: '9px', color: '#475569', fontWeight: 700, letterSpacing: '1px', marginBottom: '3px' }}>{group.toUpperCase()}</div>
-            <div style={{ display: 'flex', gap: '5px', overflowX: 'auto', paddingBottom: '2px' }}>
+
+        {/* GROUP + SYMBOL SELECTOR */}
+        {GROUPS.map(group => (
+          <div key={group} style={{ marginTop: '10px' }}>
+            <div style={{ fontSize: '10px', color: '#475569', fontWeight: 700, letterSpacing: '1px', marginBottom: '4px' }}>
+              {group.toUpperCase()}
+            </div>
+            <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
               {SYMBOLS.filter(s => s.group === group).map(s => (
-                <button key={s.id} onClick={() => setSym(s.id)} style={{ padding: '4px 9px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', border: 'none', background: sym === s.id ? '#3b82f6' : '#0f172a', color: sym === s.id ? '#fff' : '#94a3b8', boxShadow: sym === s.id ? '0 0 8px #3b82f666' : 'none' }}>{s.flag} {s.label}</button>
+                <button key={s.id} onClick={() => setSym(s.id)} style={{
+                  padding: '6px 12px', borderRadius: '20px', fontSize: '13px', fontWeight: 700,
+                  whiteSpace: 'nowrap', border: 'none',
+                  background: sym === s.id ? '#3b82f6' : '#0f172a',
+                  color: sym === s.id ? '#fff' : '#94a3b8',
+                  boxShadow: sym === s.id ? '0 0 10px #3b82f666' : 'none'
+                }}>{s.flag} {s.label}</button>
               ))}
             </div>
           </div>
         ))}
-        <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
-          {TIMEFRAMES.map(t => <button key={t} onClick={() => setTf(t)} style={{ flex: 1, padding: '6px 0', borderRadius: '6px', fontSize: '12px', fontWeight: 700, border: tf === t ? '1px solid #3b82f6' : '1px solid #334155', background: tf === t ? '#1e3a5f' : 'transparent', color: tf === t ? '#3b82f6' : '#64748b' }}>{t}</button>)}
+
+        {/* TIMEFRAMES */}
+        <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
+          {TIMEFRAMES.map(t => (
+            <button key={t} onClick={() => setTf(t)} style={{
+              flex: 1, padding: '8px 0', borderRadius: '8px', fontSize: '13px', fontWeight: 700,
+              border: tf === t ? '1px solid #3b82f6' : '1px solid #334155',
+              background: tf === t ? '#1e3a5f' : 'transparent',
+              color: tf === t ? '#3b82f6' : '#64748b'
+            }}>{t}</button>
+          ))}
         </div>
       </div>
 
-      <div style={{ padding: '14px 12px' }}>
-        {error && <div style={{ background: '#450a0a', border: '1px solid #ef4444', borderRadius: '8px', padding: '10px 14px', marginBottom: '12px', color: '#fca5a5', fontSize: '13px' }}>⚠️ {error}</div>}
-
-        {cur.price != null && (
-          <div style={{ background: 'linear-gradient(135deg,#1e293b,#0f172a)', border: '1px solid #334155', borderRadius: '10px', padding: '12px 16px', marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>{activeSym?.flag} {activeSym?.label} · {tf}</div>
-              <div style={{ fontSize: '26px', fontWeight: 800, color: '#f1f5f9', fontVariantNumeric: 'tabular-nums' }}>{cur.price.toLocaleString('es-ES', { maximumFractionDigits: 2 })}</div>
-            </div>
-            {cur.priceChange != null && <div style={{ fontSize: '16px', fontWeight: 700, color: cur.priceChange >= 0 ? '#22c55e' : '#ef4444', background: (cur.priceChange >= 0 ? '#22c55e' : '#ef4444') + '22', padding: '6px 12px', borderRadius: '8px' }}>{cur.priceChange >= 0 ? '+' : ''}{cur.priceChange.toFixed(2)}%</div>}
+      {/* CONTENT */}
+      <div style={{ padding: '16px 14px' }}>
+        {error && (
+          <div style={{ background: '#450a0a', border: '1px solid #ef4444', borderRadius: '10px', padding: '12px 16px', marginBottom: '14px', color: '#fca5a5', fontSize: '14px' }}>
+            ⚠️ {error}
           </div>
         )}
 
+        {/* PRICE */}
+        {cur.price != null && (
+          <div style={{
+            background: 'linear-gradient(135deg,#1e293b,#0f172a)', border: '1px solid #334155',
+            borderRadius: '12px', padding: '16px', marginBottom: '14px',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+          }}>
+            <div>
+              <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
+                {activeSym?.flag} {activeSym?.label} · {tf}
+              </div>
+              <div style={{ fontSize: '30px', fontWeight: 800, color: '#f1f5f9', fontVariantNumeric: 'tabular-nums' }}>
+                {cur.price.toLocaleString('es-ES', { maximumFractionDigits: 4 })}
+              </div>
+            </div>
+            {cur.priceChange != null && (
+              <div style={{
+                fontSize: '18px', fontWeight: 700,
+                color: cur.priceChange >= 0 ? '#22c55e' : '#ef4444',
+                background: (cur.priceChange >= 0 ? '#22c55e' : '#ef4444') + '22',
+                padding: '8px 14px', borderRadius: '10px'
+              }}>
+                {cur.priceChange >= 0 ? '+' : ''}{cur.priceChange.toFixed(2)}%
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* INDICATORS */}
         <Section title="Indicadores Técnicos" icon="📊">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
             <IndicatorCard name="STC" value={cur.STC ?? null} min={0} max={100} />
             <IndicatorCard name="SMI" value={cur.SMI ?? null} min={-100} max={100} />
           </div>
           <IndicatorCard name="HARSi" value={cur.HARSi ?? null} min={0} max={100} />
         </Section>
 
-        <Section title="Oscilador de Volumen" icon="📈" open={false}>
-          {cur.volOsc?.length > 0 ? (
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', height: '60px' }}>
-              {cur.volOsc.map((d, i) => { const max = Math.max(...cur.volOsc.map(x => Math.abs(x.value))); const h = max > 0 ? (Math.abs(d.value) / max) * 55 : 0; return <div key={i} style={{ flex: 1, height: `${h}px`, background: d.value >= 0 ? '#22c55e' : '#ef4444', borderRadius: '2px 2px 0 0', minWidth: '4px', alignSelf: 'flex-end', opacity: 0.8 }} /> })}
-            </div>
-          ) : <div style={{ color: '#64748b', fontSize: '12px', textAlign: 'center', padding: '20px 0' }}>Sin datos</div>}
+        {/* ALERTS */}
+        <Section title="Alarmas Android" icon="🔔" open={false}>
+          <AlertPanel
+            alertConfig={alertConfig} setAlertConfig={setAlertConfig}
+            notifPermission={notifPermission} onRequestPermission={requestPermission}
+          />
         </Section>
 
-        <Section title="Alertas Telegram" icon="🔔" open={false}>
+        {/* TELEGRAM */}
+        <Section title="Alertas Telegram" icon="✈️" open={false}>
           {['BOT TOKEN', 'CHAT ID'].map((label, idx) => (
-            <div key={label} style={{ marginBottom: '10px' }}>
-              <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>{label}</label>
-              <input type={idx === 0 ? 'password' : 'text'} value={idx === 0 ? tgToken : tgChat} onChange={e => idx === 0 ? setTgToken(e.target.value) : setTgChat(e.target.value)} placeholder={idx === 0 ? '123456789:ABCdef...' : '-100123456789'} style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', color: '#f1f5f9', borderRadius: '6px', padding: '8px 10px', fontSize: '13px' }} />
+            <div key={label} style={{ marginBottom: '12px' }}>
+              <label style={{ fontSize: '13px', color: '#94a3b8', display: 'block', marginBottom: '5px', fontWeight: 600 }}>{label}</label>
+              <input
+                type={idx === 0 ? 'password' : 'text'}
+                value={idx === 0 ? tgToken : tgChat}
+                onChange={e => idx === 0 ? setTgToken(e.target.value) : setTgChat(e.target.value)}
+                placeholder={idx === 0 ? '123456789:ABCdef...' : '-100123456789'}
+                style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', color: '#f1f5f9', borderRadius: '8px', padding: '10px 12px', fontSize: '14px' }}
+              />
             </div>
           ))}
-          <div style={{ marginBottom: '12px' }}>
-            <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '6px', fontWeight: 600 }}>ALERTAS POR TIMEFRAME</div>
-            {TIMEFRAMES.map(t => (
-              <div key={t} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0', borderBottom: '1px solid #0f172a' }}>
-                <span style={{ minWidth: '48px', fontWeight: 700, fontSize: '12px', color: '#3b82f6', background: '#1e3a5f', padding: '3px 8px', borderRadius: '4px', textAlign: 'center' }}>{t}</span>
-                {['STC', 'SMI'].map(ind => <label key={ind} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#94a3b8', cursor: 'pointer' }}><input type="checkbox" checked={alertCfg[t]?.[ind] || false} onChange={e => setAlertCfg(p => ({ ...p, [t]: { ...p[t], [ind]: e.target.checked } }))} style={{ accentColor: '#3b82f6' }} />{ind}</label>)}
-              </div>
-            ))}
-          </div>
-          <button onClick={sendTest} style={{ width: '100%', padding: '9px', background: '#1e3a5f', border: '1px solid #3b82f6', color: '#3b82f6', borderRadius: '6px', fontSize: '12px', fontWeight: 700 }}>🧪 Enviar mensaje de prueba</button>
-          {testStatus && <div style={{ marginTop: '8px', padding: '8px 10px', borderRadius: '6px', fontSize: '12px', background: testStatus.ok === true ? '#14532d' : testStatus.ok === false ? '#450a0a' : '#1e293b', color: testStatus.ok === true ? '#86efac' : testStatus.ok === false ? '#fca5a5' : '#94a3b8' }}>{testStatus.msg}</div>}
+          <button onClick={sendTest} style={{ width: '100%', padding: '12px', background: '#1e3a5f', border: '1px solid #3b82f6', color: '#3b82f6', borderRadius: '8px', fontSize: '14px', fontWeight: 700 }}>
+            🧪 Enviar mensaje de prueba
+          </button>
+          {testStatus && (
+            <div style={{ marginTop: '10px', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', background: testStatus.ok === true ? '#14532d' : testStatus.ok === false ? '#450a0a' : '#1e293b', color: testStatus.ok === true ? '#86efac' : testStatus.ok === false ? '#fca5a5' : '#94a3b8' }}>
+              {testStatus.msg}
+            </div>
+          )}
         </Section>
 
+        {/* SIGNAL SUMMARY */}
         <Section title="Resumen de Señales" icon="🎯" open={false}>
-          <div style={{ display: 'grid', gap: '6px' }}>
-            {TIMEFRAMES.map(t => { const d = cache[`${sym}_${t}`] || {}; return <div key={t} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: '#0f172a', borderRadius: '6px' }}><span style={{ fontSize: '12px', fontWeight: 700, color: '#3b82f6', minWidth: '48px' }}>{t}</span><div style={{ display: 'flex', gap: '6px' }}><Badge value={d.STC ?? null} indicator="STC" /><Badge value={d.SMI ?? null} indicator="SMI" /></div><button onClick={() => { setTf(t); fetchData(sym, t) }} style={{ background: 'transparent', border: '1px solid #334155', color: '#64748b', borderRadius: '4px', padding: '3px 8px', fontSize: '11px' }}>Ver</button></div> })}
+          <div style={{ display: 'grid', gap: '8px' }}>
+            {TIMEFRAMES.map(t => {
+              const d = cache[`${sym}_${t}`] || {}
+              return (
+                <div key={t} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#0f172a', borderRadius: '8px' }}>
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: '#3b82f6', minWidth: '52px' }}>{t}</span>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <Badge value={d.STC ?? null} indicator="STC" />
+                    <Badge value={d.SMI ?? null} indicator="SMI" />
+                  </div>
+                  <button onClick={() => { setTf(t); fetchData(sym, t) }} style={{ background: 'transparent', border: '1px solid #334155', color: '#64748b', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', fontWeight: 600 }}>Ver</button>
+                </div>
+              )
+            })}
           </div>
-          <button onClick={() => TIMEFRAMES.forEach(t => fetchData(sym, t))} style={{ width: '100%', marginTop: '10px', padding: '9px', background: '#1e3a5f', border: '1px solid #3b82f6', color: '#3b82f6', borderRadius: '6px', fontSize: '12px', fontWeight: 700 }}>↻ Actualizar todos</button>
+          <button onClick={() => TIMEFRAMES.forEach(t => fetchData(sym, t))} style={{ width: '100%', marginTop: '12px', padding: '12px', background: '#1e3a5f', border: '1px solid #3b82f6', color: '#3b82f6', borderRadius: '8px', fontSize: '14px', fontWeight: 700 }}>
+            ↻ Actualizar todos los timeframes
+          </button>
         </Section>
 
-        <div style={{ textAlign: 'center', color: '#334155', fontSize: '11px', marginTop: '20px' }}>IBEXRadar PRO · Yahoo Finance via ibexradar-backend.onrender.com</div>
+        <div style={{ textAlign: 'center', color: '#334155', fontSize: '12px', marginTop: '20px' }}>
+          IBEXRadar PRO · Yahoo Finance via ibexradar-backend.onrender.com
+        </div>
       </div>
     </div>
   )
