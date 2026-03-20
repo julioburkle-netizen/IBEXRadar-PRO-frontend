@@ -17,8 +17,9 @@ const SYMBOLS = [
 ]
 
 const GROUPS = ['Índices', 'Forex', 'Cripto']
-const TIMEFRAMES = ['4H', 'Daily', 'Weekly', 'Monthly']
+const TIMEFRAMES = ['1H', '4H', 'Daily', 'Weekly', 'Monthly']
 const TF_PARAMS = {
+  '1H':     { interval: '15m', range: '7d'  },
   '4H':     { interval: '1h',  range: '60d' },
   'Daily':  { interval: '1d',  range: '1y'  },
   'Weekly': { interval: '1wk', range: '5y'  },
@@ -379,7 +380,12 @@ export default function App() {
       const parsed = parseYahoo(await res.json())
       if (!parsed) throw new Error('Sin datos de Yahoo Finance')
       let { closes, highs, lows, volumes, price, priceChange } = parsed
-      if (timeframe === '4H') {
+      if (timeframe === '1H') {
+        closes  = closes.filter((_, i) => i % 4 === 0)
+        highs   = highs.filter((_, i) => i % 4 === 0)
+        lows    = lows.filter((_, i) => i % 4 === 0)
+        volumes = volumes.filter((_, i) => i % 4 === 0)
+      } else if (timeframe === '4H') {
         closes  = closes.filter((_, i) => i % 4 === 0)
         highs   = highs.filter((_, i) => i % 4 === 0)
         lows    = lows.filter((_, i) => i % 4 === 0)
