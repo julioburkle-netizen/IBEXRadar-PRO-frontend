@@ -25,7 +25,7 @@ const TF_PARAMS = {
   'Monthly':{ interval: '1mo', range: '10y' },
 }
 
-// ── Indicators ───────────────────────────────────────────────────────────────
+// ── Math ─────────────────────────────────────────────────────────────────────
 
 function calcEMA(arr, period) {
   const k = 2 / (period + 1)
@@ -147,7 +147,7 @@ function parseYahoo(json) {
   } catch { return null }
 }
 
-// ── Signal helpers ───────────────────────────────────────────────────────────
+// ── Signal helpers ────────────────────────────────────────────────────────────
 
 function getSignal(value, ind) {
   if (value == null) return 'neutral'
@@ -171,55 +171,39 @@ function getLabel(value, ind) {
   return '—'
 }
 
-// ── Notifications ────────────────────────────────────────────────────────────
+// ── Notifications ─────────────────────────────────────────────────────────────
 
-async function requestNotificationPermission() {
-  if (!('Notification' in window)) return false
-  if (Notification.permission === 'granted') return true
-  const perm = await Notification.requestPermission()
-  return perm === 'granted'
-}
-
-function sendNotification(title, body, icon = '/icon-192.png') {
-  if (Notification.permission === 'granted') {
-    new Notification(title, { body, icon, badge: '/icon-192.png', vibrate: [200, 100, 200] })
+function sendNotification(title, body) {
+  if (Notification?.permission === 'granted') {
+    new Notification(title, { body, icon: '/icon-192.png', vibrate: [200, 100, 200] })
   }
 }
 
 function checkAlerts(newData, prevData, sym, tf, alertConfig) {
   if (!alertConfig?.enabled) return
   const symLabel = SYMBOLS.find(s => s.id === sym)?.label || sym
-  const indicators = ['STC', 'SMI', 'HARSi']
-  for (const ind of indicators) {
+  for (const ind of ['STC', 'SMI', 'HARSi']) {
     if (!alertConfig[ind]) continue
-    const newVal = newData[ind]
-    const prevVal = prevData?.[ind]
+    const newVal = newData[ind], prevVal = prevData?.[ind]
     if (newVal == null) continue
     const newSig = getSignal(newVal, ind)
     const prevSig = prevVal != null ? getSignal(prevVal, ind) : null
-
-    // Signal change alert
     if (prevSig && prevSig !== newSig) {
-      const emoji = newSig === 'bull' ? '🟢' : newSig === 'bear' ? '🔴' : '🟡'
-      sendNotification(
-        `${emoji} ${ind} — ${symLabel} ${tf}`,
-        `Señal cambió a ${getLabel(newVal, ind)} (${newVal.toFixed(1)})`
-      )
+      const e = newSig === 'bull' ? '🟢' : newSig === 'bear' ? '🔴' : '🟡'
+      sendNotification(`${e} ${ind} — ${symLabel} ${tf}`, `Señal: ${getLabel(newVal, ind)} (${newVal.toFixed(1)})`)
     }
-
-    // Level cross alerts
     if (prevVal != null) {
       if (ind === 'STC') {
-        if (prevVal < 75 && newVal >= 75) sendNotification(`🟢 STC ALCISTA — ${symLabel} ${tf}`, `STC cruzó 75 → ${newVal.toFixed(1)}`)
-        if (prevVal > 25 && newVal <= 25) sendNotification(`🔴 STC BAJISTA — ${symLabel} ${tf}`, `STC cruzó 25 → ${newVal.toFixed(1)}`)
+        if (prevVal < 75 && newVal >= 75) sendNotification(`🟢 STC ALCISTA — ${symLabel} ${tf}`, `Cruzó 75 → ${newVal.toFixed(1)}`)
+        if (prevVal > 25 && newVal <= 25) sendNotification(`🔴 STC BAJISTA — ${symLabel} ${tf}`, `Cruzó 25 → ${newVal.toFixed(1)}`)
       }
       if (ind === 'SMI') {
-        if (prevVal < 40 && newVal >= 40) sendNotification(`🟢 SMI SOBRECOMPRA — ${symLabel} ${tf}`, `SMI cruzó 40 → ${newVal.toFixed(1)}`)
-        if (prevVal > -40 && newVal <= -40) sendNotification(`🔴 SMI SOBREVENTA — ${symLabel} ${tf}`, `SMI cruzó -40 → ${newVal.toFixed(1)}`)
+        if (prevVal < 40 && newVal >= 40) sendNotification(`🟢 SMI SOBRECOMPRA — ${symLabel} ${tf}`, `Cruzó 40 → ${newVal.toFixed(1)}`)
+        if (prevVal > -40 && newVal <= -40) sendNotification(`🔴 SMI SOBREVENTA — ${symLabel} ${tf}`, `Cruzó -40 → ${newVal.toFixed(1)}`)
       }
       if (ind === 'HARSi') {
-        if (prevVal < 60 && newVal >= 60) sendNotification(`🟢 HARSi FUERTE — ${symLabel} ${tf}`, `HARSi cruzó 60 → ${newVal.toFixed(1)}`)
-        if (prevVal > 40 && newVal <= 40) sendNotification(`🔴 HARSi DÉBIL — ${symLabel} ${tf}`, `HARSi cruzó 40 → ${newVal.toFixed(1)}`)
+        if (prevVal < 60 && newVal >= 60) sendNotification(`🟢 HARSi FUERTE — ${symLabel} ${tf}`, `Cruzó 60 → ${newVal.toFixed(1)}`)
+        if (prevVal > 40 && newVal <= 40) sendNotification(`🔴 HARSi DÉBIL — ${symLabel} ${tf}`, `Cruzó 40 → ${newVal.toFixed(1)}`)
       }
     }
   }
@@ -230,11 +214,7 @@ function checkAlerts(newData, prevData, sym, tf, alertConfig) {
 function Badge({ value, indicator }) {
   const color = getColor(value, indicator)
   return (
-    <span style={{
-      display: 'inline-block', padding: '4px 10px', borderRadius: '6px',
-      fontSize: '12px', fontWeight: 800, color,
-      background: color + '22', border: `1px solid ${color}44`
-    }}>
+    <span style={{ display: 'inline-block', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 800, color, background: color + '22', border: `1px solid ${color}44` }}>
       {getLabel(value, indicator)}
     </span>
   )
@@ -249,8 +229,32 @@ function GaugeBar({ value, min, max, color }) {
   )
 }
 
-function IndicatorCard({ name, value, min, max }) {
+function VolumePill({ volStatus, volTrend }) {
+  if (volStatus == null) return null
+  const positive = volStatus === 'positive'
+  const rising = volTrend === 'rising'
+  const color = positive ? '#22c55e' : '#ef4444'
+  const trendArrow = rising ? '▲' : '▼'
+  const label = positive ? 'VOL +' : 'VOL -'
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '8px', background: color + '15', border: `1px solid ${color}44`, marginTop: '10px' }}>
+      <span style={{ fontSize: '18px' }}>{positive ? '📈' : '📉'}</span>
+      <div>
+        <span style={{ fontSize: '13px', fontWeight: 800, color }}>{label}</span>
+        <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '6px' }}>Oscilador {trendArrow} {rising ? 'creciendo' : 'cayendo'}</span>
+      </div>
+    </div>
+  )
+}
+
+function IndicatorCard({ name, value, min, max, volStatus, volTrend }) {
   const color = getColor(value, name)
+  const sig = getSignal(value, name)
+  // Confirmation logic: signal is confirmed if vol is positive for bull, negative for bear
+  const confirmed = sig !== 'neutral' && volStatus != null
+    ? (sig === 'bull' && volStatus === 'positive') || (sig === 'bear' && volStatus === 'negative')
+    : null
+
   return (
     <div style={{ background: '#0f172a', border: `1px solid ${value != null ? color + '44' : '#334155'}`, borderRadius: '10px', padding: '14px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -261,6 +265,11 @@ function IndicatorCard({ name, value, min, max }) {
         {value != null ? value.toFixed(1) : '—'}
       </div>
       {value != null && <GaugeBar value={value} min={min} max={max} color={color} />}
+      {confirmed !== null && (
+        <div style={{ marginTop: '8px', fontSize: '12px', fontWeight: 700, color: confirmed ? '#22c55e' : '#f59e0b' }}>
+          {confirmed ? '✅ CONFIRMADO por volumen' : '⚠️ SIN CONFIRMAR (volumen opuesto)'}
+        </div>
+      )}
     </div>
   )
 }
@@ -269,12 +278,7 @@ function Section({ title, icon, children, open: initOpen = true }) {
   const [open, setOpen] = useState(initOpen)
   return (
     <div style={{ marginBottom: '14px' }}>
-      <button onClick={() => setOpen(!open)} style={{
-        width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        background: '#1e293b', border: '1px solid #334155',
-        borderRadius: open ? '10px 10px 0 0' : '10px',
-        padding: '12px 16px', color: '#f1f5f9', fontSize: '15px', fontWeight: 700,
-      }}>
+      <button onClick={() => setOpen(!open)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#1e293b', border: '1px solid #334155', borderRadius: open ? '10px 10px 0 0' : '10px', padding: '12px 16px', color: '#f1f5f9', fontSize: '15px', fontWeight: 700 }}>
         <span>{icon} {title}</span>
         <span style={{ color: '#64748b', fontSize: '14px' }}>{open ? '▲' : '▼'}</span>
       </button>
@@ -287,8 +291,6 @@ function Section({ title, icon, children, open: initOpen = true }) {
   )
 }
 
-// ── Alert Config Panel ────────────────────────────────────────────────────────
-
 function AlertPanel({ alertConfig, setAlertConfig, notifPermission, onRequestPermission }) {
   return (
     <div>
@@ -297,31 +299,19 @@ function AlertPanel({ alertConfig, setAlertConfig, notifPermission, onRequestPer
           <div style={{ fontSize: '15px', fontWeight: 700, color: '#f1f5f9' }}>Alarmas Android</div>
           <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Notificaciones nativas en tu móvil</div>
         </div>
-        <button
-          onClick={() => setAlertConfig(p => ({ ...p, enabled: !p.enabled }))}
-          style={{
-            padding: '8px 16px', borderRadius: '20px', fontSize: '13px', fontWeight: 700, border: 'none',
-            background: alertConfig.enabled ? '#22c55e' : '#334155',
-            color: alertConfig.enabled ? '#fff' : '#64748b',
-          }}
-        >
+        <button onClick={() => setAlertConfig(p => ({ ...p, enabled: !p.enabled }))} style={{ padding: '8px 16px', borderRadius: '20px', fontSize: '13px', fontWeight: 700, border: 'none', background: alertConfig.enabled ? '#22c55e' : '#334155', color: alertConfig.enabled ? '#fff' : '#64748b' }}>
           {alertConfig.enabled ? '✅ ON' : 'OFF'}
         </button>
       </div>
 
       {notifPermission !== 'granted' && (
-        <button onClick={onRequestPermission} style={{
-          width: '100%', marginBottom: '14px', padding: '12px', borderRadius: '8px',
-          background: '#1e3a5f', border: '1px solid #3b82f6', color: '#3b82f6',
-          fontSize: '14px', fontWeight: 700
-        }}>
+        <button onClick={onRequestPermission} style={{ width: '100%', marginBottom: '14px', padding: '12px', borderRadius: '8px', background: '#1e3a5f', border: '1px solid #3b82f6', color: '#3b82f6', fontSize: '14px', fontWeight: 700 }}>
           🔔 Activar notificaciones del sistema
         </button>
       )}
-
       {notifPermission === 'granted' && (
         <div style={{ background: '#14532d', border: '1px solid #22c55e', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', fontSize: '13px', color: '#86efac' }}>
-          ✅ Notificaciones activadas en este dispositivo
+          ✅ Notificaciones activadas
         </div>
       )}
 
@@ -336,21 +326,13 @@ function AlertPanel({ alertConfig, setAlertConfig, notifPermission, onRequestPer
               {ind === 'HARSi' && 'Cruza 40 o 60 · Cambia señal'}
             </div>
           </div>
-          <button
-            onClick={() => setAlertConfig(p => ({ ...p, [ind]: !p[ind] }))}
-            style={{
-              padding: '6px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: 700, border: 'none',
-              background: alertConfig[ind] ? '#3b82f6' : '#334155',
-              color: alertConfig[ind] ? '#fff' : '#64748b'
-            }}
-          >
+          <button onClick={() => setAlertConfig(p => ({ ...p, [ind]: !p[ind] }))} style={{ padding: '6px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: 700, border: 'none', background: alertConfig[ind] ? '#3b82f6' : '#334155', color: alertConfig[ind] ? '#fff' : '#64748b' }}>
             {alertConfig[ind] ? '✅' : '○'}
           </button>
         </div>
       ))}
-
       <div style={{ marginTop: '14px', padding: '10px 14px', background: '#0f172a', borderRadius: '8px', fontSize: '12px', color: '#64748b' }}>
-        ℹ️ La app revisa señales automáticamente cada 5 minutos cuando está abierta.
+        ℹ️ La app revisa señales cada 5 minutos mientras está abierta.
       </div>
     </div>
   )
@@ -381,8 +363,9 @@ export default function App() {
   useEffect(() => { localStorage.setItem('tg_chatid', tgChat) }, [tgChat])
 
   const requestPermission = async () => {
-    const granted = await requestNotificationPermission()
-    setNotifPermission(granted ? 'granted' : 'denied')
+    if (!('Notification' in window)) return
+    const perm = await Notification.requestPermission()
+    setNotifPermission(perm)
   }
 
   const fetchData = useCallback(async (symbolId, timeframe, silent = false) => {
@@ -406,10 +389,14 @@ export default function App() {
       const vh = highs.filter(v => v !== null)
       const vl = lows.filter(v => v !== null)
       const vv = volumes.filter(v => v !== null)
+      const volOsc = calcVolumeOsc(vv)
+      const lastVol = volOsc.length ? volOsc[volOsc.length - 1]?.value : null
+      const prevVol = volOsc.length > 1 ? volOsc[volOsc.length - 2]?.value : null
+      const volStatus = lastVol == null ? null : lastVol > 0 ? 'positive' : 'negative'
+      const volTrend = lastVol != null && prevVol != null ? (Math.abs(lastVol) > Math.abs(prevVol) ? 'rising' : 'falling') : null
       const newData = {
-        STC: calcSTC(vc), SMI: calcSMI(vh, vl, vc),
-        HARSi: calcHARSi(vc), volOsc: calcVolumeOsc(vv),
-        price, priceChange
+        STC: calcSTC(vc), SMI: calcSMI(vh, vl, vc), HARSi: calcHARSi(vc),
+        volOsc, volStatus, volTrend, price, priceChange
       }
       const key = `${symbolId}_${timeframe}`
       checkAlerts(newData, prevCache.current[key], symbolId, timeframe, alertConfig)
@@ -426,78 +413,57 @@ export default function App() {
   useEffect(() => {
     fetchData(sym, tf)
     if (timer.current) clearInterval(timer.current)
-    timer.current = setInterval(() => fetchData(sym, tf, true), 5 * 60 * 1000) // every 5 min
+    timer.current = setInterval(() => fetchData(sym, tf, true), 5 * 60 * 1000)
     return () => clearInterval(timer.current)
   }, [sym, tf, fetchData])
 
   const cur = cache[`${sym}_${tf}`] || {}
   const activeSym = SYMBOLS.find(s => s.id === sym)
 
+  // Telegram — llamada directa a la API de Telegram (sin pasar por backend)
   const sendTest = async () => {
     if (!tgToken || !tgChat) { setTestStatus({ ok: false, msg: 'Rellena Token y Chat ID' }); return }
     setTestStatus({ ok: null, msg: 'Enviando...' })
     try {
-      const res = await fetch(`${BACKEND}/api/telegram/test`, {
+      const res = await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: tgToken, chatId: tgChat })
+        body: JSON.stringify({ chat_id: tgChat, text: '✅ IBEXRadar PRO — Conexión Telegram OK 🚀' })
       })
       const d = await res.json()
-      setTestStatus({ ok: d.ok, msg: d.ok ? '✅ Enviado' : `❌ ${d.error}` })
+      setTestStatus({ ok: d.ok, msg: d.ok ? '✅ Mensaje enviado correctamente' : `❌ ${d.description}` })
     } catch { setTestStatus({ ok: false, msg: '❌ Error de conexión' }) }
   }
 
   return (
     <div style={{ maxWidth: '480px', margin: '0 auto', minHeight: '100vh', paddingBottom: '40px', fontSize: '16px' }}>
       {/* HEADER */}
-      <div style={{
-        background: 'linear-gradient(135deg,#1e293b,#0f172a)',
-        borderBottom: '1px solid #334155', padding: '16px 16px 12px',
-        position: 'sticky', top: 0, zIndex: 100
-      }}>
+      <div style={{ background: 'linear-gradient(135deg,#1e293b,#0f172a)', borderBottom: '1px solid #334155', padding: '16px 16px 12px', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: '22px', fontWeight: 800, color: '#f1f5f9' }}>
-              📡 IBEXRadar <span style={{ color: '#3b82f6' }}>PRO</span>
-            </div>
+            <div style={{ fontSize: '22px', fontWeight: 800, color: '#f1f5f9' }}>📡 IBEXRadar <span style={{ color: '#3b82f6' }}>PRO</span></div>
             <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
               {lastUpdate ? `Actualizado: ${lastUpdate.toLocaleTimeString('es-ES')}` : 'Cargando...'}{loading && ' ⟳'}
             </div>
           </div>
-          <button onClick={() => fetchData(sym, tf)} disabled={loading} style={{
-            background: loading ? '#334155' : '#1e3a5f', border: '1px solid #3b82f6',
-            color: '#3b82f6', borderRadius: '10px', padding: '10px 16px', fontSize: '18px', fontWeight: 700
-          }}>↻</button>
+          <button onClick={() => fetchData(sym, tf)} disabled={loading} style={{ background: loading ? '#334155' : '#1e3a5f', border: '1px solid #3b82f6', color: '#3b82f6', borderRadius: '10px', padding: '10px 16px', fontSize: '18px', fontWeight: 700 }}>↻</button>
         </div>
 
-        {/* GROUP + SYMBOL SELECTOR */}
         {GROUPS.map(group => (
           <div key={group} style={{ marginTop: '10px' }}>
-            <div style={{ fontSize: '10px', color: '#475569', fontWeight: 700, letterSpacing: '1px', marginBottom: '4px' }}>
-              {group.toUpperCase()}
-            </div>
+            <div style={{ fontSize: '10px', color: '#475569', fontWeight: 700, letterSpacing: '1px', marginBottom: '4px' }}>{group.toUpperCase()}</div>
             <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
               {SYMBOLS.filter(s => s.group === group).map(s => (
-                <button key={s.id} onClick={() => setSym(s.id)} style={{
-                  padding: '6px 12px', borderRadius: '20px', fontSize: '13px', fontWeight: 700,
-                  whiteSpace: 'nowrap', border: 'none',
-                  background: sym === s.id ? '#3b82f6' : '#0f172a',
-                  color: sym === s.id ? '#fff' : '#94a3b8',
-                  boxShadow: sym === s.id ? '0 0 10px #3b82f666' : 'none'
-                }}>{s.flag} {s.label}</button>
+                <button key={s.id} onClick={() => setSym(s.id)} style={{ padding: '5px 11px', borderRadius: '20px', fontSize: '12px', fontWeight: 700, whiteSpace: 'nowrap', border: 'none', background: sym === s.id ? '#3b82f6' : '#0f172a', color: sym === s.id ? '#fff' : '#94a3b8', boxShadow: sym === s.id ? '0 0 8px #3b82f666' : 'none' }}>
+                  {s.flag} {s.label}
+                </button>
               ))}
             </div>
           </div>
         ))}
 
-        {/* TIMEFRAMES */}
         <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
           {TIMEFRAMES.map(t => (
-            <button key={t} onClick={() => setTf(t)} style={{
-              flex: 1, padding: '8px 0', borderRadius: '8px', fontSize: '13px', fontWeight: 700,
-              border: tf === t ? '1px solid #3b82f6' : '1px solid #334155',
-              background: tf === t ? '#1e3a5f' : 'transparent',
-              color: tf === t ? '#3b82f6' : '#64748b'
-            }}>{t}</button>
+            <button key={t} onClick={() => setTf(t)} style={{ flex: 1, padding: '8px 0', borderRadius: '8px', fontSize: '13px', fontWeight: 700, border: tf === t ? '1px solid #3b82f6' : '1px solid #334155', background: tf === t ? '#1e3a5f' : 'transparent', color: tf === t ? '#3b82f6' : '#64748b' }}>{t}</button>
           ))}
         </div>
       </div>
@@ -512,47 +478,48 @@ export default function App() {
 
         {/* PRICE */}
         {cur.price != null && (
-          <div style={{
-            background: 'linear-gradient(135deg,#1e293b,#0f172a)', border: '1px solid #334155',
-            borderRadius: '12px', padding: '16px', marginBottom: '14px',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-          }}>
+          <div style={{ background: 'linear-gradient(135deg,#1e293b,#0f172a)', border: '1px solid #334155', borderRadius: '12px', padding: '16px', marginBottom: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
-                {activeSym?.flag} {activeSym?.label} · {tf}
-              </div>
+              <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>{activeSym?.flag} {activeSym?.label} · {tf}</div>
               <div style={{ fontSize: '30px', fontWeight: 800, color: '#f1f5f9', fontVariantNumeric: 'tabular-nums' }}>
                 {cur.price.toLocaleString('es-ES', { maximumFractionDigits: 4 })}
               </div>
             </div>
             {cur.priceChange != null && (
-              <div style={{
-                fontSize: '18px', fontWeight: 700,
-                color: cur.priceChange >= 0 ? '#22c55e' : '#ef4444',
-                background: (cur.priceChange >= 0 ? '#22c55e' : '#ef4444') + '22',
-                padding: '8px 14px', borderRadius: '10px'
-              }}>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: cur.priceChange >= 0 ? '#22c55e' : '#ef4444', background: (cur.priceChange >= 0 ? '#22c55e' : '#ef4444') + '22', padding: '8px 14px', borderRadius: '10px' }}>
                 {cur.priceChange >= 0 ? '+' : ''}{cur.priceChange.toFixed(2)}%
               </div>
             )}
           </div>
         )}
 
-        {/* INDICATORS */}
+        {/* INDICATORS + VOLUME STATUS */}
         <Section title="Indicadores Técnicos" icon="📊">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-            <IndicatorCard name="STC" value={cur.STC ?? null} min={0} max={100} />
-            <IndicatorCard name="SMI" value={cur.SMI ?? null} min={-100} max={100} />
+          <VolumePill volStatus={cur.volStatus} volTrend={cur.volTrend} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px', marginBottom: '10px' }}>
+            <IndicatorCard name="STC" value={cur.STC ?? null} min={0} max={100} volStatus={cur.volStatus} volTrend={cur.volTrend} />
+            <IndicatorCard name="SMI" value={cur.SMI ?? null} min={-100} max={100} volStatus={cur.volStatus} volTrend={cur.volTrend} />
           </div>
-          <IndicatorCard name="HARSi" value={cur.HARSi ?? null} min={0} max={100} />
+          <IndicatorCard name="HARSi" value={cur.HARSi ?? null} min={0} max={100} volStatus={cur.volStatus} volTrend={cur.volTrend} />
+
+          {/* VOLUME OSCILLATOR BARS */}
+          {cur.volOsc?.length > 0 && (
+            <div style={{ marginTop: '14px' }}>
+              <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '6px', fontWeight: 600 }}>OSCILADOR DE VOLUMEN</div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', height: '50px' }}>
+                {cur.volOsc.map((d, i) => {
+                  const max = Math.max(...cur.volOsc.map(x => Math.abs(x.value)))
+                  const h = max > 0 ? (Math.abs(d.value) / max) * 46 : 0
+                  return <div key={i} style={{ flex: 1, height: `${h}px`, background: d.value >= 0 ? '#22c55e' : '#ef4444', borderRadius: '2px 2px 0 0', minWidth: '4px', alignSelf: 'flex-end', opacity: 0.8 }} />
+                })}
+              </div>
+            </div>
+          )}
         </Section>
 
-        {/* ALERTS */}
+        {/* ALARMS */}
         <Section title="Alarmas Android" icon="🔔" open={false}>
-          <AlertPanel
-            alertConfig={alertConfig} setAlertConfig={setAlertConfig}
-            notifPermission={notifPermission} onRequestPermission={requestPermission}
-          />
+          <AlertPanel alertConfig={alertConfig} setAlertConfig={setAlertConfig} notifPermission={notifPermission} onRequestPermission={requestPermission} />
         </Section>
 
         {/* TELEGRAM */}
@@ -560,13 +527,7 @@ export default function App() {
           {['BOT TOKEN', 'CHAT ID'].map((label, idx) => (
             <div key={label} style={{ marginBottom: '12px' }}>
               <label style={{ fontSize: '13px', color: '#94a3b8', display: 'block', marginBottom: '5px', fontWeight: 600 }}>{label}</label>
-              <input
-                type={idx === 0 ? 'password' : 'text'}
-                value={idx === 0 ? tgToken : tgChat}
-                onChange={e => idx === 0 ? setTgToken(e.target.value) : setTgChat(e.target.value)}
-                placeholder={idx === 0 ? '123456789:ABCdef...' : '-100123456789'}
-                style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', color: '#f1f5f9', borderRadius: '8px', padding: '10px 12px', fontSize: '14px' }}
-              />
+              <input type={idx === 0 ? 'password' : 'text'} value={idx === 0 ? tgToken : tgChat} onChange={e => idx === 0 ? setTgToken(e.target.value) : setTgChat(e.target.value)} placeholder={idx === 0 ? '123456789:ABCdef...' : '-100123456789'} style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', color: '#f1f5f9', borderRadius: '8px', padding: '10px 12px', fontSize: '14px' }} />
             </div>
           ))}
           <button onClick={sendTest} style={{ width: '100%', padding: '12px', background: '#1e3a5f', border: '1px solid #3b82f6', color: '#3b82f6', borderRadius: '8px', fontSize: '14px', fontWeight: 700 }}>
@@ -584,14 +545,26 @@ export default function App() {
           <div style={{ display: 'grid', gap: '8px' }}>
             {TIMEFRAMES.map(t => {
               const d = cache[`${sym}_${t}`] || {}
+              const vol = d.volStatus
+              const stcSig = getSignal(d.STC, 'STC')
+              const confirmed = stcSig !== 'neutral' && vol != null
+                ? (stcSig === 'bull' && vol === 'positive') || (stcSig === 'bear' && vol === 'negative')
+                : null
               return (
-                <div key={t} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#0f172a', borderRadius: '8px' }}>
-                  <span style={{ fontSize: '14px', fontWeight: 700, color: '#3b82f6', minWidth: '52px' }}>{t}</span>
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <Badge value={d.STC ?? null} indicator="STC" />
-                    <Badge value={d.SMI ?? null} indicator="SMI" />
+                <div key={t} style={{ padding: '10px 12px', background: '#0f172a', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 700, color: '#3b82f6', minWidth: '52px' }}>{t}</span>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <Badge value={d.STC ?? null} indicator="STC" />
+                      <Badge value={d.SMI ?? null} indicator="SMI" />
+                    </div>
+                    <button onClick={() => { setTf(t); fetchData(sym, t) }} style={{ background: 'transparent', border: '1px solid #334155', color: '#64748b', borderRadius: '6px', padding: '5px 10px', fontSize: '12px' }}>Ver</button>
                   </div>
-                  <button onClick={() => { setTf(t); fetchData(sym, t) }} style={{ background: 'transparent', border: '1px solid #334155', color: '#64748b', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', fontWeight: 600 }}>Ver</button>
+                  {confirmed !== null && (
+                    <div style={{ fontSize: '11px', marginTop: '4px', color: confirmed ? '#22c55e' : '#f59e0b' }}>
+                      {confirmed ? '✅ Vol confirma señal' : '⚠️ Vol no confirma'}
+                    </div>
+                  )}
                 </div>
               )
             })}
